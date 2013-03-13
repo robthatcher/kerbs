@@ -2,19 +2,19 @@
 
 # Name: kerbs - KernelBuildSetup tool. 
 
-# Comment: This script is provided as a convenience only, if in doubt perform it's constituent parts manually.
+# Comment: This script is provided as a convenience only, 
+# if in doubt perform it's constituent parts manually.
 
-# Author: Rob Thatcher 2013  
+# Author: Rob Thatcher 2013 http://robthatcher.net
 
 VERSION='0.1.1'
 
 #TODO
 #
 # Add -i | --interactive - To allow command line variable setting interactively
-
 # Add -f | --force-apt - To force apt-get update
-# Add -h | --help - To display usage flags
 # Add -d | --deploy - To make the dpkg install of the kernel happen
+# Improve commandline capabilities
 
 # Vars - Vars
 
@@ -31,21 +31,30 @@ S1B_LOGFILE="kerbs_stage1b_logfile.log"
 S2_LOGFILE="kerbs_stage2_logfile.log"
 S3_LOGFILE="kerbs_stage3_logfile.log"
 
-#Kernel Customname
-CUSTOMNAME=robt.01
+# Kernel Customname
+CUSTOMNAME=robt-02
 
 # Vars - End Vars
 
-
 # Lockfile and banner - Establish a lock to avoid overuse of apt-get and show banner
 # Check for reset flag on cmd line to remove logs and locks
-clear
 case $1	in
+	-h|--help)
+		echo -e "\nPossible flags which may be passed are :\n\t"
+		echo -e "\t-h or --help for this help"
+		echo -e "\t-v or --version for version check"
+		echo -e "\t-r or --reset to force a full lock and log file removal\n"
+		exit 0;;
+	-v|--version)
+		echo -e "\nkerbs - Kernel Build Setup Tool version $VERSION\n" 
+		exit 0 ;;
 	-r|--reset)
 		echo -e "\nReset flagged, clearing any log files and lockfiles from /tmp\n"
+		echo -e "\nReminder -  use 'sudo apt-get purge linux-xxxxx-.x.x.x*' to remove kernels.\n"
 		rm /tmp/kerbs_*	2> /dev/null
 		exit 0;;
 	*)
+		clear
 		echo -e "\n\tKerbs - KernelBuildSetup Tools - Rob Thatcher @2013 http://robthatcher.net\n"
 		echo -e "\tNo reset requested, continuing with steps outlined below...\n"	
 		echo -e "\t1 : make x86_64_defconfig && make menuconfig"
@@ -55,36 +64,30 @@ case $1	in
 	esac
 sleep 2
 
-# Build environment - Customise build environment, this is driven by the var section
+# Read multiple command line args (?) and act on contents...
+
+# if [-i | -- interactive]; then
+	# read from stdin to set vars
+	# else programmatically set then export
+		#Number of make jobs CPU can handle
+		MAX_CPU=`cat /proc/cpuinfo | grep processor | wc -l`
+		#Number of make jobs to run
+		MCL_DEF=4 # I have forced this to 4 for convenience, we should default to 1#
+		#Architechture Type
+		MACH_TYPE=`uname -m`
+		echo -e "\tMax make jobs based on CPU = $MAX_CPU, no option set so $MCL_DEF selected, Arch Type = $MACH_TYPE\n"
+		export CONCURRENCY_LEVEL=$MCL_DEF
+		export CHOST="x86_64-pc-Linux-gnu"
+		export CFLAGS="march=native -O2 -pipe -msse -msse2 -mmmx"
+		export CXXFLAGS="$CFLAGS"
+#fi
+
+# State Build environment - Customise build environment, this is driven by the var section
+
 echo -e "\n\tSetting lockfile $LOCKFILE\n" 									
 echo -e "\tSetting build flags 'CONCURRENCY_LEVEL' 'CHOST' 'CFLAGS' and 'CXXFLAGS'\n"
 echo -e "\tBuild using : \n\t\t $MCL_DEF core(s), $MACH_TYPE O2 pipe SSE SSE2 MMX \n\t\t(CPU capabilities @ http://ark.intel.com)\n"
 echo -e "\tChecking for build pre-requisites...\n"
-
-sleep 5
-
-# Read multiple command line args (array?) and act on contents...
-
-# if [-i | -- interactive]; then
-
-	# read from stdin to set vars
-
-# else programmatically set then export
-
-	#Number of make jobs CPU can handle
-	MAX_CPU=`cat /proc/cpuinfo | grep processor | wc -l`
-	#Number of make jobs to run
-	MCL_DEF=1
-	#Architechture Type
-	MACH_TYPE=`uname -m`
-	echo -e "\tMax make jobs based on CPU = $MAX_CPU, no option set so $MCL_DEF selected, Arch Type = $MACH_TYPE\n"
-	export CONCURRENCY_LEVEL=$MCL_DEF
-	export CHOST="x86_64-pc-Linux-gnu"
-	export CFLAGS="march=native -O2 -pipe -msse -msse2 -mmmx"
-	export CXXFLAGS="$CFLAGS"
-	sleep 3
- 
-#fi
 
 # If there is a lock file, setup already ran today, else clear old lockfiles, apt-get update && upgrade, then set lockfile.
 
@@ -104,7 +107,7 @@ else
 		echo -e "\tbuild-essential\n\tkernel-package\n\tlibncurses5-dev\n\tfakeroot\n\twget\n\tbzip2\n"
 		echo -e "\tYou're prompted for your password to run apt-get using sudo as required\n"
 
-		echo -e "\tDEBUG apt-get step would occur here, skipping.."
+		echo -e "\tWARNING - apt-get step would occur here, skipping as we're testing.."
 
 		#sudo apt-get -q update  									# Commented during dev 
 		#sudo apt-get -q install build-essential kernel-package libncurses5-dev fakeroot wget bzip2     # Commented during dev
@@ -113,25 +116,28 @@ else
 	fi
 fi
 
-#Main steps to run build stages,  i.e. make x86_64_defconfig && make menuconfig etc...
-#Comment out during testing as needed.
+echo -e "\n\tSleeping whilst you read the above......."
+sleep 5
+
+# Main steps to run build stages,  i.e. make x86_64_defconfig && make menuconfig etc...
+# Comment out during testing as needed.
 
 echo -e "\n\tRunning Stage 1a\n\n--> 'make x86_64_defconfig' - no interaction required\n"
-sleep 2
-#make x86_64_defconfig 2>&1 > $LOGPATH/$S1A_LOGFILE 
+sleep 1
+make x86_64_defconfig 2>&1 > $LOGPATH/$S1A_LOGFILE 
 
 echo -e "\n\tRunning Stage 1b\n\n--> 'make menuconfig' - tune your kernel selections and save as .config\n"
 sleep 2
-#make menuconfig 2> $LOGPATH/$S1B_LOGIFLE
+make menuconfig 2> $LOGPATH/$S1B_LOGFILE
 
 echo -e "\n\tRunning Stage 2\n\n--> 'fakeroot make-kpkg clean'\n"
-sleep 2
-#fakeroot make-kpkg clean 2>&1 > $LOGPATH/$S2_LOGFILE
+sleep 1
+fakeroot make-kpkg clean 2>&1 > $LOGPATH/$S2_LOGFILE
 
 echo -e "\n\tRunning Stage 3\n\n--> 'fakeroot make-kpkg --initrd --append-to-version=-$CUSTOMNAME kernel_image kernel_headers modules_image'\n\n\tN.B. This will take some time.... coffee?\n"
-sleep 2
+sleep 1
 
-#fakeroot make-kpkg --initrd --append-to-version=-$CUSTOMNAME kernel_image kernel_headers modules_image 2>&1 > $LOGPATH/$S3_LOGFILE
+fakeroot make-kpkg --initrd --append-to-version=-$CUSTOMNAME kernel_image kernel_headers modules_image 2>&1 > $LOGPATH/$S3_LOGFILE
 
 echo -e "\n\tExecuted Stages 1, 2 and 3 using kerbs.\n"
 echo -e "\n\tPlease check log files listed below, located in /tmp\n\n\t$S1A_LOGFILE \n\t$S1B_LOGFILE \n\t$S2_LOGFILE \n\t$S3_LOGFILE"
@@ -146,5 +152,5 @@ else
 	echo -e "\tN.B. use 'sudo apt-get purge linux-image-.x.x.x*' to remove\n"
 fi
 
-### END
+# END
 
